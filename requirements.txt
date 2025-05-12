@@ -9,4 +9,3 @@ pillow
 pytesseract
 PyMuPDF
 gunicorn
-fitz
