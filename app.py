@@ -260,6 +260,8 @@ def chat():
                         file_bytes = f.read()
 
                     extracted_result = extract_text(temp_file_path, language="eng", use_openocr=True)
+                    print("Extracted text from File")
+                    print(extracted_result)
 
                     if isinstance(extracted_result, dict) and "error" in extracted_result:
                         os.unlink(temp_file_path)
@@ -321,9 +323,9 @@ def chat():
         if user_response or contents:
             last_question = history[-1]
             if user_response:
+                print(user_response)
                 answers.append(user_response)
-                contents.insert(0, {"text": f"Q: {last_question}\nA: {user_response}"})
-
+                
                 history.append(f"A: {user_response}")
                 save_session(session_id, history, answers, completed)
             else:
