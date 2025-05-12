@@ -261,7 +261,7 @@ def chat():
                         file_bytes = f.read()
 
                     extracted_result = extract_text(temp_file_path, language="eng", use_openocr=True)
-                    print("Extracted text from File")
+                    print("Extracted text from File:")
                     print(extracted_result)
 
                     if isinstance(extracted_result, dict) and "error" in extracted_result:
@@ -324,6 +324,7 @@ def chat():
         if user_response or contents:
             last_question = history[-1]
             if user_response:
+                print("User Response:")
                 print(user_response)
                 answers.append(user_response)
                 
@@ -358,6 +359,8 @@ def chat():
         prompt = f"You are an AI assistant conducting a structured interview to gather transparency data for a product.\n Here is the conversation so far:\n{joined_history}\n\nAsk the next logical question that builds upon previous answers. Avoid repetition."
         contents.insert(0, {"text": f"{few_shot} + {prompt}\nWhat is the next appropriate question to ask?"})
 
+        print(prompt)
+        
         model_response = model.generate_content(contents)
         next_question = model_response.text.strip()
 
