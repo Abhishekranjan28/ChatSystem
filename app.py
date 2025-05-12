@@ -206,6 +206,7 @@ def extract_text(file_path,language,use_openocr=True):
                     return extracted_result 
 
                 extracted_text = extracted_result["text"]
+                print(extracted_text)
                 if extracted_text:
                     text += f"Page {page_num + 1}:\n{extracted_text}\n\n"
 
