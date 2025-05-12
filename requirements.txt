@@ -10,3 +10,4 @@ pytesseract
 PyMuPDF
 gunicorn
 python-dotenv
+google.generativeai
