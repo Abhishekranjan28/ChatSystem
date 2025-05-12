@@ -360,6 +360,7 @@ def chat():
         contents.insert(0, {"text": f"{few_shot} + {prompt}\nWhat is the next appropriate question to ask?"})
 
         print(prompt)
+        print(contents)
         
         model_response = model.generate_content(contents)
         next_question = model_response.text.strip()
