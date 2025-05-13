@@ -323,16 +323,36 @@ def chat():
 
         if user_response or contents:
             last_question = history[-1]
-            if user_response:
-                print("User Response:")
-                print(user_response)
-                answers.append(user_response)
-                
-                history.append(f"A: {user_response}")
+            print("user response")
+            print(user_response)
+            
+            history_text = '\n'.join(history)
+            validation_prompt = (
+             f"You are an expert AI assistant. A user was asked the following question:\n"
+             f"Q: {last_question}\n\n"
+             f"They responded with:\nA: {user_response}\n\n"
+             f"Using your own knowledge and the conversation so far:\n{history_text}\n\n"
+             f"Determine if this answer is correct, complete, and factually accurate. "
+             f"Respond with only 'Correct' or 'Incorrect'."
+             )
+
+            validation_result = model.generate_content(validation_prompt).text.strip().lower()
+            print("validation result")
+            print(validation_result)
+
+            if validation_result == "correct":
+                print("Response was correct")
+                answers.append(user_response or "[File Uploaded]")
+                contents.insert(0, {"text": f"Q: {last_question}\nA: {user_response or '[File Uploaded]'}"})
+                history.append(f"Q: {last_question}\nA: {user_response or '[File Uploaded]'}")
                 save_session(session_id, history, answers, completed)
             else:
-                answers.append("[File Uploaded]")
-                contents.insert(0, {"text": f"Q: {last_question}\nA: [File Uploaded]"})
+                print("Response was incorrect")
+                return jsonify({
+                    "message": f"The provided answer seems incorrect or incomplete. Please try again.\n\n{last_question}",
+                    "completed": False,
+                    "question_number": len(history)
+                })
 
 
         if len(answers) >= 5:
