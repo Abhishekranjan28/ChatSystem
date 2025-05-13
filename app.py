@@ -328,13 +328,16 @@ def chat():
             
             history_text = '\n'.join(history)
             validation_prompt = (
-             f"You are an expert AI assistant. A user was asked the following question:\n"
-             f"Q: {last_question}\n\n"
-             f"They responded with:\nA: {user_response}\n\n"
-             f"Using your own knowledge and the conversation so far:\n{history_text}\n\n"
-             f"Determine if this answer is correct, complete, and factually accurate. "
-             f"Respond with only 'Correct' or 'Incorrect'."
-             )
+            f"You are an expert AI assistant. A user was asked the following question:\n"
+            f"Q: {last_question}\n\n"
+            f"They responded with:\nA: {user_response or '[File Uploaded]'}\n\n"
+            f"Conversation history so far:\n{history_text}\n\n"
+            f"Your task is to validate the user's response based on the following criteria:\n"
+            f"1. The answer must be correct, complete, and factually accurate.\n"
+            f"2. The answer must not contradict any previous responses in the conversation. For example, the user should not mention an ingredient or product detail in one place and contradict it elsewhere.\n"
+            f"3. Do not mark responses as incorrect for generic or straightforward answers like product name, company name, brand, or place of production—unless they clearly contradict earlier responses or are obviously wrong.\n\n"
+            f"Respond with only 'Correct' or 'Incorrect'."
+            )
 
             validation_result = model.generate_content(validation_prompt).text.strip().lower()
             print("validation result")
