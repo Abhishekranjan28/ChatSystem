@@ -343,8 +343,8 @@ def chat():
             if validation_result == "correct":
                 print("Response was correct")
                 answers.append(user_response or "[File Uploaded]")
-                contents.insert(0, {"text": f"Q: {last_question}\nA: {user_response or '[File Uploaded]'}"})
-                history.append(f"Q: {last_question}\nA: {user_response or '[File Uploaded]'}")
+                contents.insert(0, {"text": f"Q: {last_question}\nA: {user_response}"})
+                history.append(f"A: {user_response}")
                 save_session(session_id, history, answers, completed)
             else:
                 print("Response was incorrect")
