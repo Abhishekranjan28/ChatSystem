@@ -48,15 +48,18 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sessions (
+        CREATE TABLE IF NOT EXISTS user_sessions (
             session_id TEXT PRIMARY KEY,
             history TEXT,
             answers TEXT,
-            completed BOOLEAN
+            completed BOOLEAN,
+            attempts TEXT
         )
     ''')
     conn.commit()
     conn.close()
+
+init_db()
 
 initial_question = "What is your name of company?"
 
@@ -113,7 +116,7 @@ def get_few_shot_prompt():
 def get_session(session_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT history, answers, completed FROM sessions WHERE session_id = %s", (session_id,))
+    cursor.execute("SELECT history, answers, completed, attempts FROM user_sessions WHERE session_id = %s", (session_id,))
     row = cursor.fetchone()
     conn.close()
 
@@ -121,23 +124,36 @@ def get_session(session_id):
         history = json.loads(row[0])
         answers = json.loads(row[1])
         completed = row[2]
+        attempts = json.loads(row[3]) if row[3] else {}
     else:
         history = []
         answers = []
         completed = False
-        save_session(session_id, history, answers, completed)
+        attempts = {}
+        save_session(session_id, history, answers, completed, attempts)
 
-    return history, answers, completed
+    return history, answers, completed, attempts
 
-def save_session(session_id, history, answers, completed):
+
+def save_session(session_id, history, answers, completed, attempts):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO sessions (session_id, history, answers, completed)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO user_sessions (session_id, history, answers, completed, attempts)
+        VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (session_id)
-        DO UPDATE SET history = EXCLUDED.history, answers = EXCLUDED.answers, completed = EXCLUDED.completed
-    ''', (session_id, json.dumps(history), json.dumps(answers), completed))
+        DO UPDATE SET 
+            history = EXCLUDED.history, 
+            answers = EXCLUDED.answers, 
+            completed = EXCLUDED.completed,
+            attempts = EXCLUDED.attempts
+    ''', (
+        session_id,
+        json.dumps(history),
+        json.dumps(answers),
+        completed,
+        json.dumps(attempts)
+    ))
     conn.commit()
     conn.close()
 
@@ -310,11 +326,13 @@ def chat():
             session_id = data.get("session_id")
             user_response = data.get("user_response")
 
-        history, answers, completed = get_session(session_id)
+        history, answers, completed, attempts = get_session(session_id)
+        if attempts is None:
+            attempts = {}
 
         if not history:
             history.append(initial_question)
-            save_session(session_id, history, answers, completed)
+            save_session(session_id, history, answers, completed, attempts)
             return jsonify({
                 "message": initial_question,
                 "completed": False,
@@ -322,21 +340,26 @@ def chat():
             })
 
         if user_response or contents:
-            last_question = history[-1]
-            print("user response")
+            print("User Response")
             print(user_response)
-            
+            last_question = history[-1]
+            question_number = len(answers) + 1
+            question_key = f"question_{question_number}"
+
             history_text = '\n'.join(history)
+            
             validation_prompt = (
-            f"You are an expert AI assistant. A user was asked the following question:\n"
+            f"You are an expert AI assistant to validate the User Responses. A user was asked the following question:\n"
             f"Q: {last_question}\n\n"
             f"They responded with:\nA: {user_response or '[File Uploaded]'}\n\n"
             f"Conversation history so far:\n{history_text}\n\n"
             f"Your task is to validate the user's response based on the following criteria:\n"
             f"1. The answer must be correct, complete, and factually accurate.\n"
-            f"2. The answer must not contradict any previous responses in the conversation. For example, the user should not mention an ingredient or product detail in one place and contradict it elsewhere.\n"
+            f"2. The answer must not contradict any previous responses in the conversation.\n"
             f"3. Do not mark responses as incorrect for generic or straightforward answers like product name, company name, brand, or place of production—unless they clearly contradict earlier responses or are obviously wrong.\n\n"
-            f"Respond with only 'Correct' or 'Incorrect'."
+            f"Output 'Correct' if the response is accurate and meets all the above criteria.\n"
+            f"Otherwise, output 'Incorrect' followed by a brief explanation of why the response is incorrect.\n"
+            f"Do not include any explanation if the response is correct."
             )
 
             validation_result = model.generate_content(validation_prompt).text.strip().lower()
@@ -344,23 +367,35 @@ def chat():
             print(validation_result)
 
             if validation_result == "correct":
-                print("Response was correct")
+                print("Validation was correct")
                 answers.append(user_response or "[File Uploaded]")
                 contents.insert(0, {"text": f"Q: {last_question}\nA: {user_response}"})
                 history.append(f"A: {user_response}")
-                save_session(session_id, history, answers, completed)
+                attempts.pop(question_key, None)
+                save_session(session_id, history, answers, completed, attempts)
             else:
-                print("Response was incorrect")
-                return jsonify({
-                    "message": f"The provided answer seems incorrect or incomplete. Please try again.\n\n{last_question}",
-                    "completed": False,
-                    "question_number": len(history)
-                })
+                attempts[question_key] = attempts.get(question_key, 0) + 1
+                print("Inside the Wrong answer and increasing the attempt")
+                if attempts[question_key] >= 3:
+                    answers.append(user_response)
+                    contents.insert(0, {"text": f"Q: {last_question}\nA: {user_response}"})
+                    history.append(f"A: {user_response}")
+                    save_session(session_id, history, answers, completed, attempts)
 
+                else:
+                    save_session(session_id, history, answers, completed, attempts)
+                    return jsonify({
+                        "message": f"{validation_result}. Attempt {attempts[question_key]} of 3.Please try again.\n\n{last_question}",
+                        "completed": False,
+                        "question_number": len(history)
+                    })
 
         if len(answers) >= 5:
             completed = True
-            report_prompt = "Generate a report summarizing the following questions and answers:\n"
+            report_prompt = "Generate a report summarizing the following questions and answers and instructions:\n"
+            with open('prompt.txt', 'r', encoding='utf-8') as file:
+                content = file.read()
+            report_prompt += content
             for i, (q, a) in enumerate(zip(history, answers)):
                 report_prompt += f"Q{i+1}: {q}\nA: {a}\n"
 
@@ -368,7 +403,7 @@ def chat():
             response = model.generate_content(contents)
             report = response.text.strip()
 
-            save_session(session_id, history, answers, completed)
+            save_session(session_id, history, answers, completed, attempts)
             return jsonify({
                 "message": "Thank you! All questions answered.",
                 "completed": True,
@@ -378,36 +413,37 @@ def chat():
 
         joined_history = "\n".join(history)
         few_shot = get_few_shot_prompt()
-
-        prompt = f"You are an AI assistant conducting a structured interview to gather transparency data for a product.\n Here is the conversation so far:\n{joined_history}\n\nAsk the next logical question that builds upon previous answers. Avoid repetition."
-        contents.insert(0, {"text": f"{few_shot} + {prompt}\nWhat is the next appropriate question to ask?"})
-
-        print(prompt)
-        print(contents)
         
+        prompt = (
+        f"You are a friendly and insightful AI assistant conducting a structured interview to gather transparency data for a product.\n"
+        f"Here is the conversation so far:\n{joined_history}\n\n"
+        f"Based on the responses provided so far, ask the next most relevant and logical question that builds on the previous answers.\n"
+        f"Make sure the question is clear, concise, and naturally follows from the conversation. Avoid asking repetitive or redundant questions."
+        )
+
+        contents.insert(0, {"text": f"{few_shot}\n{prompt}\nWhat is the next appropriate question to ask?"})
+
         model_response = model.generate_content(contents)
         next_question = model_response.text.strip()
 
         history.append(next_question)
-        save_session(session_id, history, answers, completed)
+        save_session(session_id, history, answers, completed, attempts)
 
         return jsonify({
             "message": next_question,
             "completed": False,
-            "question_number": len(answers) + 1
+            "question_number": len(history)
         })
 
     except Exception as e:
         print("Error in /chats:", e)
         return jsonify({"error": str(e)}), 500
-
     finally:
-      if temp_file_path and os.path.exists(temp_file_path):
+        if temp_file_path and os.path.exists(temp_file_path):
             try:
                 os.unlink(temp_file_path)
             except Exception as e:
                 print(f"Warning: Failed to delete temp file: {e}")
-
 
 if __name__ == '__main__':
     init_db()
