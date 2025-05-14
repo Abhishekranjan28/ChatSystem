@@ -1,0 +1,42 @@
+Report
+Conduct AI-assisted compliance screening evaluating:
+
+Category Fit: Ensure product is in eligible category (e.g., Food, Cosmetics, Clothing).
+
+NOVA Classification: For food, classify within NOVA I-III.
+
+Organic Certification: Validate certifications (e.g., USDA, EU Organic).
+
+Transparency Metrics: Assess end-to-end transparency across sourcing and production.
+
+Compliance Likelihood: Flag non-compliance risks or missing data.
+
+Label Tier Classification:
+
+Platinum: 100% transparency.
+
+Gold (Tier 1): 100% transparency in 75% of production, remaining 25% meets organic standards.
+
+Green: 100% transparency in 50% of production, remaining 50% meets organic standards.
+
+Non-Compliant: Falls outside eligible categories or lacks certifications.
+
+Feedback Report
+Include:
+
+Eligibility Status
+
+Label Tier Classification
+
+Next Steps (audit/advisory)
+
+Advisory Services
+
+Cosmetics: Ingredient safety, transparency
+
+Clothing: Organic sourcing, supply chain traceability
+
+Expandable to other sectors (e.g., wellness, ethical tech)
+
+Document Instructions
+If any critical data or documents (product category, organic certifications, transparency details) are missing, request them for full compliance report.
