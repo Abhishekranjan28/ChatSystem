@@ -390,7 +390,7 @@ def chat():
                         "question_number": len(history)
                     })
 
-        if len(answers) >= 5:
+        if len(answers) >= 20:
             completed = True
             report_prompt = "Generate a report summarizing the following questions and answers and instructions:\n"
             with open('prompt.txt', 'r', encoding='utf-8') as file:
