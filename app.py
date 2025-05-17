@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
-import psycopg2
+import psycopg2 import sql
 import json
 import os
 import base64
@@ -15,6 +15,8 @@ from PIL import Image
 import pytesseract
 import fitz
 import io
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
 CORS(app)
@@ -25,6 +27,11 @@ CORS(app)
 from dotenv import load_dotenv
 
 load_dotenv()
+
+limiter = Limiter(
+    key_func=get_remote_address,
+)
+limiter.init_app(app)
 
 import google.generativeai as genai
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -40,9 +47,13 @@ API_URL = "https://api.ocr.space/parse/image"
 
 # --- PostgreSQL Connection ---
 DB_URL=os.getenv("DB_URL")
+NEON_DB_URL=os.getenv("NEON_DB_URL")
 
 def get_db_connection():
     return psycopg2.connect(DB_URL)
+
+def get_db_connection1():
+    return psycopg2.connect(NEON_DB_URL)
 
 def init_db():
     conn = get_db_connection()
@@ -63,32 +74,28 @@ init_db()
 
 initial_question = "What is your name of company?"
 
-questions = [
-    {"q": "Name of the Brand", "t": "text"},
-    {"q": "Product Category", "t": "multiple_choice", "c": ["Food", "Clothing", "Cosmetics"]},
-    {"q": "Name of the Product", "t": "text"},
-    {"q": "Ingredients/Composition", "t": "paragraph"},
-    {"q": "Source of raw materials", "t": "paragraph"},
-    {"q": "Uniqueness of your product", "t": "paragraph"},
-    {"q": "Do you have any unique or patented production methods?", "t": "paragraph"},
-    {"q": "Do you add preservatives, artificial ingredients, additives, chemical dyes and agents?", "t": "multiple_choice", "c": ["Yes", "No", "Partially"]},
-    {"q": "Location(s) of your corporate office", "t": "text"},
-    {"q": "Location(s) of your production of this product", "t": "text"},
-    {"q": "Current Certifications held by the company for the product (Organic, Fair Trade)", "t": "text"},
-    {"q": "What part of the production process is handled by your company", "t": "paragraph"},
-    {"q": "Can you establish that the product is organic from end to end", "t": "multiple_choice", "c": ["Yes", "No"]},
-    {"q": "Can you demonstrate complete transparency of the process at your company for the product", "t": "multiple_choice", "c": ["Yes", "No"]},
-    {"q": "Upload documents that support your transparency or organic claims", "t": "files", "c": ["png", "pdf", "jpeg", "docx", "txt"]},
-    {"q": "Choose type of Farming you practice", "t": "multiple_choice", "c": ["Organic", "Regenerative", "PremaCulture", "FoodForest"]}
-]
+def query_data(conn, category, subcategory):
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            sql.SQL("SELECT content FROM {} WHERE subcategory_name = %s;")
+            .format(sql.Identifier(category)),
+            (subcategory,)
+        )
+        results = cursor.fetchall()
+        return [row[0] for row in results] 
+    except Exception as e:
+        return []
+    finally:
+        cursor.close()
 
-def get_few_shot_prompt():
-    shots = "Example questions:\n"
-    for item in questions:
-        q = item["q"]
-        a = "..." if item["t"] != "multiple_choice" else f"(Options: {', '.join(item['c'])})"
-        shots += f"Q: {q}\nA: {a}\n"
-    shots += "\n"
+def get_few_shot_prompt(conn, table, subcategory):
+    questions_list = query_data(conn, table, subcategory)
+    questions_text = questions_list[0] if questions_list else ""
+
+    shots = "Example questions you learn while asking Questions:\n"
+    shots += questions_text.strip() + "\n\n"
+    print("Shots prompt::->",shots)
     return shots
 
 '''def ask_model(prompt):
@@ -331,14 +338,30 @@ def chat():
             attempts = {}
 
         if not history:
-            history.append(initial_question)
-            save_session(session_id, history, answers, completed, attempts)
-            return jsonify({
-                "message": initial_question,
-                "completed": False,
-                "question_number": 1
-            })
+          conn = get_db_connection1()
+          all_questions = ""
 
+          for subcategory in sub_categories:
+              prompt_text = get_few_shot_prompt(conn, category, subcategory)
+              all_questions += prompt_text + "\n" 
+              print("all questions in not in history::::->",all_questions)
+
+          questions = [line.strip() for line in all_questions.split("\n") if line.strip()]
+
+          print("Info from Database::->",questions)
+
+          history.extend(questions)
+          save_session(session_id, history, answers, completed, attempts)
+
+          history.append(initial_question)
+          save_session(session_id, history, answers, completed, attempts)
+
+          return jsonify({
+                 "message": initial_question,
+                 "completed": False,
+                 "question_number": 1
+                  })
+            
         if user_response or contents:
             print("User Response")
             print(user_response)
