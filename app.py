@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
-import psycopg2 import sql
+from psycopg2 import sql
+import psycopg2
 import json
 import os
 import base64
