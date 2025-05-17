@@ -438,7 +438,6 @@ def chat():
             })
 
         joined_history = "\n".join(history)
-        few_shot = get_few_shot_prompt()
         
         prompt = (
         f"You are a friendly and insightful AI assistant conducting a structured interview to gather transparency data for a product.\n"
