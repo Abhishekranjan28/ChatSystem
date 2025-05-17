@@ -11,3 +11,4 @@ PyMuPDF
 gunicorn
 python-dotenv
 google.generativeai
+Flask-Limiter
