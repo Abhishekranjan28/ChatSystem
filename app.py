@@ -446,7 +446,7 @@ def chat():
         f"Make sure the question is clear, concise, and naturally follows from the conversation. Avoid asking repetitive or redundant questions."
         )
 
-        contents.insert(0, {"text": f"{few_shot}\n{prompt}\nWhat is the next appropriate question to ask?"})
+        contents.insert(0, {"text": f"{prompt}\nWhat is the next appropriate question to ask?"})
 
         model_response = model.generate_content(contents)
         next_question = model_response.text.strip()
