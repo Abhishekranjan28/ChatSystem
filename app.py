@@ -333,6 +333,8 @@ def chat():
             data = request.get_json()
             session_id = data.get("session_id")
             user_response = data.get("user_response")
+            category=data.get("category","")
+            sub_categories=data.get("sub_categories",[])
 
         history, answers, completed, attempts = get_session(session_id)
         if attempts is None:
