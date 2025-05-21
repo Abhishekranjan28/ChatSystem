@@ -22,9 +22,6 @@ from flask_limiter.util import get_remote_address
 app = Flask(__name__)
 CORS(app)
 
-#API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-base"
-#HF_API_KEY = "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"
-
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -42,19 +39,18 @@ model = genai.GenerativeModel("gemini-2.0-flash")
 API_KEY = os.getenv("OCR_SPACE_API_KEY")
 API_URL = "https://api.ocr.space/parse/image"
 
-'''headers = {
-    "Authorization": f"Bearer {HF_API_KEY}"
-}'''
-
-# --- PostgreSQL Connection ---
 DB_URL=os.getenv("DB_URL")
 NEON_DB_URL=os.getenv("NEON_DB_URL")
+DB_URL_FOR_REPORT=os.getenv("DB_URL_FOR_REPORT")
 
 def get_db_connection():
     return psycopg2.connect(DB_URL)
 
 def get_db_connection1():
     return psycopg2.connect(NEON_DB_URL)
+
+def get_db_connection2():
+    return psycopg2.connect(DB_URL_FOR_REPORT)
 
 def init_db():
     conn = get_db_connection()
@@ -81,6 +77,21 @@ def query_data(conn, category, subcategory):
         cursor.execute(
             sql.SQL("SELECT content FROM {} WHERE subcategory_name = %s;")
             .format(sql.Identifier(category)),
+            (subcategory,)
+        )
+        results = cursor.fetchall()
+        return [row[0] for row in results] 
+    except Exception as e:
+        return []
+    finally:
+        cursor.close()
+
+def query_data_for_report(conn, table, subcategory):
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            sql.SQL("SELECT content FROM {} WHERE subcategory_name = %s;")
+            .format(sql.Identifier(table)),
             (subcategory,)
         )
         results = cursor.fetchall()
@@ -352,6 +363,9 @@ def chat():
           questions = [line.strip() for line in all_questions.split("\n") if line.strip()]
 
           print("Info from Database::->",questions)
+        
+          history.append(category)
+          history.append(json.dumps(sub_categories)) 
 
           history.extend(questions)
           save_session(session_id, history, answers, completed, attempts)
@@ -419,11 +433,27 @@ def chat():
         if len(answers) >= 20:
             completed = True
             report_prompt = "Generate a report summarizing the following questions and answers and instructions:\n"
-            with open('prompt.txt', 'r', encoding='utf-8') as file:
-                content = file.read()
-            report_prompt += content
-            for i, (q, a) in enumerate(zip(history, answers)):
-                report_prompt += f"Q{i+1}: {q}\nA: {a}\n"
+            '''with open('prompt.txt', 'r', encoding='utf-8') as file:
+                content = file.read()'''
+            
+            category = history[0]
+            sub_categories = json.loads(history[1]) if isinstance(history[1], str) else history[1]
+            conn=get_db_connection2()
+            
+            all_content=""
+            
+            for subcategory in sub_categories:
+              result = query_data_for_report(conn, category, subcategory)
+              all_content += result[0] + "\n" 
+              print("all questions in not in history::::->",all_content)
+            
+            report_prompt += all_content
+            print("Report prompt before history",report_prompt)
+            
+            for i, a in enumerate(history): 
+                report_prompt += f"{i+1}:{a}\n"
+
+            print("Report prompt after history",report_prompt)
 
             contents.insert(0, {"text": report_prompt})
             response = model.generate_content(contents)
